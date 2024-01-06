@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"github.com/maciekole/pokedex/pokeapi"
 	"os"
@@ -10,33 +11,55 @@ import (
 type cliCommand struct {
 	name        string
 	description string
-	callback    func() error
+	callback    func(*config) error
 }
 
-func commandHelp() error {
+type config struct {
+	Next     *string
+	Previous *string
+}
+
+func commandHelp(cfg *config) error {
 	fmt.Println("Help command invoked")
 	return nil
 }
 
-func commandExit() error {
+func commandExit(cfg *config) error {
 	os.Exit(0)
 	return nil
 }
 
-func commandMap() error {
+func commandMap(cfg *config) error {
 	fmt.Println("Map command invoked")
-	locationName, err := pokeapi.GetLocation(1)
+	locations, nextStartingLocation, nextStartingLocationBack, err := pokeapi.GetLocationsForward(cfg.Next)
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Println(locationName)
+
+	cfg.Next = nextStartingLocation
+	cfg.Previous = nextStartingLocationBack
+
+	for _, location := range locations {
+		fmt.Println(location)
+	}
 	return nil
 }
 
-func commandMapB() error {
-	err := pokeapi.Xd()
+func commandMapB(cfg *config) error {
+	if cfg.Previous == nil {
+		return errors.New("you are on first page")
+	}
+	fmt.Println("Map command invoked")
+	locations, nextStartingLocation, nextStartingLocationBack, err := pokeapi.GetLocationsBackward(cfg.Previous)
 	if err != nil {
 		fmt.Println(err)
+	}
+
+	cfg.Next = nextStartingLocation
+	cfg.Previous = nextStartingLocationBack
+
+	for _, location := range locations {
+		fmt.Println(location)
 	}
 	return nil
 }
@@ -69,6 +92,7 @@ func getCommands() map[string]cliCommand {
 
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
+	cfg := &config{}
 	for {
 		fmt.Println("Pokedex > ")
 		scanner.Scan()
@@ -83,10 +107,12 @@ func main() {
 		command, exists := getCommands()[commandName]
 
 		if exists {
-			err := command.callback()
+			err := command.callback(cfg)
 			if err != nil {
 				fmt.Println(err)
 			}
+
+			fmt.Println(fmt.Sprintf("\nDEBUG: cfg %v", cfg))
 			continue
 		} else {
 			fmt.Println("Unknown command")
